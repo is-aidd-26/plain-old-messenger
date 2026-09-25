@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ARCH_DIR="$SCRIPT_DIR/../docs/architecture"
+
+PUPPETEER_CONFIG="$(mktemp)"
+trap 'rm -f "$PUPPETEER_CONFIG"' EXIT
+cat > "$PUPPETEER_CONFIG" <<'EOF'
+{
+  "args": ["--no-sandbox", "--disable-setuid-sandbox"]
+}
+EOF
+
+shopt -s nullglob
+md_files=("$ARCH_DIR"/*.md)
+if ((${#md_files[@]} == 0)); then
+    echo "Нет markdown-файлов в $ARCH_DIR" >&2
+    exit 1
+fi
+
+failed=0
+for md in "${md_files[@]}"; do
+    if ! grep -q '^```mermaid' "$md"; then
+        echo "SKIP  $(basename "$md") (нет mermaid-блока)"
+        continue
+    fi
+    base="${md%.md}"
+    echo "RENDER $(basename "$md")"
+    rm -f "$base.png"
+    for extra in "$base"-*.png; do
+        rm -f "$extra"
+    done
+    if ! npx -y -p @mermaid-js/mermaid-cli mmdc \
+        -p "$PUPPETEER_CONFIG" \
+        -b white -s 2 \
+        -i "$md" \
+        -o "$base.png"; then
+        echo "FAIL   $(basename "$md")" >&2
+        failed=1
+        continue
+    fi
+    charts=("$base"-*.png)
+    if ((${#charts[@]} == 1)) && [[ ${charts[0]} == "$base-1.png" ]]; then
+        mv "$base-1.png" "$base.png"
+        echo "OK     $(basename "${md%.md}").png"
+    elif [[ ! -e "$base.png" ]]; then
+        echo "FAIL   $(basename "$md"): неожиданный вывод mmdc (${charts[*]:-нет файлов})" >&2
+        failed=1
+    fi
+done
+
+exit $failed
