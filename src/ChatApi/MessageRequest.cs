@@ -1,7 +1,9 @@
 namespace ChatApi;
 
 /// <summary>
-///  Текст сообщения, отправленного в чат.
+///  Запрос на отправку сообщения.
 /// </summary>
+/// <param name="From">Никнейм отправителя.</param>
+/// <param name="To">Никнейм получателя; может совпадать с отправителем.</param>
 /// <param name="Text">Текст сообщения.</param>
-public sealed record MessageRequest(string Text);
+public sealed record MessageRequest(string From, string To, string Text);
