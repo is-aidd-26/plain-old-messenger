@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+#
+# check-overlap — ищет перекрытия между подписями рёбер и боксами узлов
+# в SVG, отрендеренном из Mermaid C4-диаграммы.
+#
+# Требуется Python 3.11+ (только стандартная библиотека).
+#
+# Usage:
+#     python3 scripts/check-overlap <file>.svg [<file>.svg ...]
+#
+# Код возврата:
+#     0 — перекрытий не найдено
+#     1 — найдено хотя бы одно перекрытие (или ошибка использования/парсинга)
+#
+# Как работает:
+#     Скрипт парсит SVG через xml.etree и восстанавливает геометрию
+#     двух видов объектов:
+#
+#     * Боксы узлов — группы <g class="...node..." id="my-svg-NAME">.
+#       Боксом узла считается крупнейший <rect> в группе (rect меньше
+#       10x10 px игнорируются как декоративные); если подходящего rect
+#       нет — bbox крупнейшего <path> (узлы нестандартной формы).
+#       Трансформы translate() предков суммируются, чтобы бокс оказался
+#       в корневых координатах SVG.
+#
+#     * Подписи рёбер — элементы <text> со стилем подписей C4 Rel()
+#       (font-size 12px, fill #444444). Размеры текста оцениваются, ведь
+#       в stdlib нет шрифтового рендера: ширина ~= символы * 0.62 em,
+#       высота строки ~= 1.25 em.
+#
+#     Затем каждая подпись проверяется против каждого бокса узла и против
+#     каждой другой подписи. Боксы, лишь касающиеся ребром, перекрытием
+#     не считаются. Ширина подписей — оценка, поэтому короткие сообщения
+#     о перекрытии рассматривай как повод взглянуть на PNG, а не как
+#     истину в последней инстанции.
+from __future__ import annotations
+
+import re
+import sys
+import xml.etree.ElementTree as ET
+from itertools import combinations
+from typing import NamedTuple
+
+NS_SVG = "{http://www.w3.org/2000/svg}"
+
+
+class Box(NamedTuple):
+    """Прямоугольник со сторонами, параллельными осям, в корневых координатах SVG."""
+
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+
+    def intersects(self, other: Box) -> bool:
+        """Проверяет, имеют ли два бокса общую внутреннюю область.
+
+        Строгие неравенства трактуют касание ребром как отсутствие
+        перекрытия — подпись, лежащая ровно на границе узла, не считается
+        проблемой.
+        """
+        return (
+            self.x1 < other.x2
+            and self.x2 > other.x1
+            and self.y1 < other.y2
+            and self.y2 > other.y1
+        )
+
+
+class Label(NamedTuple):
+    """Подпись ребра вместе с боксом, который она предположительно занимает."""
+
+    text: str
+    box: Box
+
+
+def translate(el: ET.Element) -> tuple[float, float]:
+    """Извлекает смещение (dx, dy) из трансформа `translate(...)`.
+
+    Mermaid раскладывает группы только простыми translate(), поэтому любой
+    другой или отсутствующий трансформ безопасно даёт (0, 0); отказ от
+    разбора scale/matrix удешевляет код и не теряет точности на выводе
+    mermaid.
+    """
+    tr = el.get("transform", "")
+    if not tr.startswith("translate("):
+        return 0.0, 0.0
+    nums = tr.removeprefix("translate(").removesuffix(")").split(",")
+    return float(nums[0]), float(nums[1])
+
+
+def path_bbox(d: str) -> Box | None:
+    """Оценивает bbox SVG-пути по атрибуту `d`.
+
+    Служит фолбэком для узлов, нарисованных без крупного rect. Разбираются
+    только команды, которые реально генерирует mermaid (M/L/A/C, абсолютные
+    или относительные), причём для кривых и дуг берутся лишь конечные точки
+    сегментов — грубо, но достаточно для ловли наложений без полноценной
+    SVG-геометрической библиотеки. Возвращает None, если путь не дал
+    ни одной точки.
+    """
+    tokens = re.findall(r"([MLACmlac])|(-?[\d.]+)", d)
+    cmds: list[tuple[str, list[float]]] = []
+    for letter, num in tokens:
+        if letter:
+            cmds.append((letter, []))
+        elif cmds:
+            cmds[-1][1].append(float(num))
+    x = y = 0.0
+    xs: list[float] = []
+    ys: list[float] = []
+    for letter, nums in cmds:
+        rel = letter.islower()
+        n = len(nums)
+        match letter.lower():
+            case "m" | "l":
+                # moveto/lineto: пары координат идут подряд
+                pts = [(nums[i], nums[i + 1]) for i in range(0, n - 1, 2)]
+            case "c":
+                # cubic bezier: конечная точка — последняя пара каждого сегмента из 6 чисел
+                pts = [(nums[i + 4], nums[i + 5]) for i in range(0, n - 1, 6)]
+            case "a":
+                # дуга (arc): конечная точка — последняя пара каждого сегмента из 7 чисел
+                pts = [(nums[i + 5], nums[i + 6]) for i in range(0, n - 1, 7)]
+            case _:
+                continue
+        for dx, dy in pts:
+            x, y = (x + dx, y + dy) if rel else (dx, dy)
+            xs.append(x)
+            ys.append(y)
+    if not xs:
+        return None
+    return Box(min(xs), min(ys), max(xs), max(ys))
+
+
+def node_bboxes(root: ET.Element) -> dict[str, Box]:
+    """Находит внешний бокс каждой C4-группы узла в SVG.
+
+    Группы отбираются по классу "node" и префиксу id "my-svg-", что
+    отфильтровывает boundary, рёбра и прочие группы из вывода mermaid.
+    Побеждает крупнейший rect: мелкие rect внутри узла декоративные;
+    крупнейший path покрывает узлы, нарисованные не прямоугольниками.
+    Смещения translate() предков накапливаются, чтобы бокс оказался
+    в корневых координатах, где его можно сравнивать с боксами подписей.
+    """
+    parent = {c: p for p in root.iter() for c in p}
+    boxes: dict[str, Box] = {}
+    for g in root.iter(NS_SVG + "g"):
+        cls = g.get("class", "")
+        if "node" not in cls or not (g.get("id") or "").startswith("my-svg-"):
+            continue
+        name = (g.get("id") or "").removeprefix("my-svg-")
+        gx = gy = 0.0
+        el: ET.Element | None = g
+        while el is not None:
+            dx, dy = translate(el)
+            gx, gy = gx + dx, gy + dy
+            el = parent.get(el)
+        best: tuple[float, float, float, float] | None = None  # (x, y, w, h)
+        for r in g.iter(NS_SVG + "rect"):
+            w, h = float(r.get("width", 0)), float(r.get("height", 0))
+            if w < 10 or h < 10:
+                continue
+            if best is None or w * h > best[2] * best[3]:
+                best = (float(r.get("x", 0)), float(r.get("y", 0)), w, h)
+        if best is None:
+            for p in g.iter(NS_SVG + "path"):
+                bb = path_bbox(p.get("d", ""))
+                if bb is None:
+                    continue
+                w, h = bb.x2 - bb.x1, bb.y2 - bb.y1
+                if best is None or w * h > best[2] * best[3]:
+                    best = (bb.x1, bb.y1, w, h)
+        if best is not None:
+            x, y, w, h = best
+            boxes[name] = Box(gx + x, gy + y, gx + x + w, gy + y + h)
+    return boxes
+
+
+def label_bboxes(root: ET.Element) -> list[Label]:
+    """Собирает тексты подписей рёбер вместе с их оценёнными боксами.
+
+    Подписи распознаются по стилю, который mermaid даёт подписям C4 Rel()
+    (12 px, заливка #444444), а не по позиции в DOM — так детекция
+    переживает изменения раскладки между версиями mermaid. Размер текста
+    приходится оценивать (в stdlib нет шрифтовых метрик): ~0.62 em на
+    символ и 1.25 em на строку — достаточно точно, чтобы помечать раскладки,
+    требующие ручной проверки.
+    """
+    boxes: list[Label] = []
+    for t in root.iter(NS_SVG + "text"):
+        style = t.get("style", "")
+        if "font-size: 12px" not in style and t.get("font-size") != "12":
+            continue
+        if t.get("fill", "") != "#444444":
+            continue
+        x = float(t.get("x", 0))
+        y = float(t.get("y", 0))
+        lines = ["".join(ts.itertext()).strip() for ts in t]
+        lines = [ln for ln in lines if ln]
+        if not lines:
+            continue
+        w = max(len(ln) for ln in lines) * 12 * 0.62
+        h = len(lines) * 12 * 1.25
+        boxes.append(
+            Label(" ".join(lines), Box(x - w / 2, y - h / 2, x + w / 2, y + h / 2))
+        )
+    return boxes
+
+
+def main(path: str) -> int:
+    """Печатает каждое найденное перекрытие и возвращает их количество.
+
+    Количество идёт в код возврата, поэтому пакетные сценарии рендера
+    (см. SKILL.md) могут отбраковывать варианты раскладки, не разбирая
+    stdout.
+    """
+    root = ET.parse(path).getroot()
+    nodes = node_bboxes(root)
+    labels = label_bboxes(root)
+    clashes = 0
+    for label in labels:
+        for name, node_box in nodes.items():
+            if label.box.intersects(node_box):
+                clashes += 1
+                print(f"OVERLAP: label '{label.text}' intersects node '{name}'")
+    for a, b in combinations(labels, 2):
+        if a.box.intersects(b.box):
+            clashes += 1
+            print(f"OVERLAP: labels '{a.text}' and '{b.text}' intersect")
+    if not clashes:
+        print("OK: no overlaps")
+    return clashes
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(f"usage: {sys.argv[0]} <file>.svg [<file>.svg ...]", file=sys.stderr)
+        sys.exit(1)
+    # Несколько файлов позволяют проверить весь батч SVG за один вызов —
+    # так render-diagrams --format=svg && check-overlap *.svg работает
+    # без shell-цикла.
+    clashes = sum(main(path) for path in sys.argv[1:])
+    sys.exit(1 if clashes else 0)

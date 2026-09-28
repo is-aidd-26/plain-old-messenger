@@ -66,3 +66,7 @@ yarn-error.log*
 .pnpm-debug.log*
 .eslintcache
 .prettiercache
+
+# Python bytecode cache
+.pyc
+__pycache__

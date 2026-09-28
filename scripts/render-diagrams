@@ -1,24 +1,64 @@
 #!/usr/bin/env python3
-"""Рендерит mermaid-диаграммы из docs/architecture/ в PNG рядом с md-файлами."""
+#
+# render-diagrams — рендерит mermaid-диаграммы в PNG рядом с исходниками.
+#
+# Требуется Python 3.11+ (только стандартная библиотека); mmdc скачивается
+# автоматически через `npx -y`.
+#
+# Usage:
+#     scripts/render-diagrams <файл>.md [<файл>.md ...]    # указанные диаграммы
+#     scripts/render-diagrams --format=svg <файл>.md       # svg для check-overlap
+#     scripts/render-all-diagrams                          # все из docs/architecture/
+#     # весь конвейер разом:
+#     scripts/render-all-diagrams --format=svg \
+#         && python3 scripts/check-overlap docs/architecture/*.svg
+#
+# Код возврата:
+#     0 — все запрошенные файлы успешно сгенерированы
+#     1 — рендер не выполнен (плохой путь, нет диаграмм) или был FAIL
+#
+# Как работает:
+#     * Рендерятся только файлы, переданные аргументами (.md или .mmd);
+#       собрать все диаграммы каталога умеет scripts/render-all-diagrams.
+#     * Каждый файл рендерится через mmdc с puppeteer-конфигом
+#       (--no-sandbox — без него Chrome падает на Ubuntu 23.10+ из-за
+#       AppArmor), флагами -b white (фон под слайды) и -s 2 (чёткость
+#       для проектора).
+#     * --format задаёт расширение выхода: png — картинки для слайдов,
+#       svg — геометрия для scripts/check-overlap (масштаб -s и фон -b
+#       детектору не мешают: узлы и подписи масштабируются одинаково).
+#     * mmdc для markdown-входа дописывает суффикс «-1» к имени выхода —
+#       скрипт переименовывает результат обратно.
+#     * Старые артефакты удаляются до запуска, чтобы после неудачного
+#       рендера не остался устаревший файл, который можно принять за свежий.
 
+import argparse
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-ARCH_DIR = Path(__file__).resolve().parent.parent / "docs" / "architecture"
 PUPPETEER_CONFIG = '{"args": ["--no-sandbox", "--disable-setuid-sandbox"]}'
 MMDC = ["npx", "-y", "-p", "@mermaid-js/mermaid-cli", "mmdc"]
+MERMAID_MARKER = "```mermaid"
 
 
-def render(md: Path, config: str) -> bool:
-    png = md.with_suffix(".png")
-    suffixed = md.with_name(f"{md.stem}-1.png")
-    png.unlink(missing_ok=True)
+def render(md: Path, config: str, fmt: str) -> bool:
+    """Рендерит один файл диаграммы в заданный формат и возвращает успех.
+
+    Старые артефакты (включая вариант с суффиксом «-1») удаляются до
+    запуска: mmdc для markdown-входа меняет имя выхода, и без зачистки
+    неудачный прогон оставил бы устаревший файл, неотличимый от свежего.
+    Вывод mmdc ловится в capture_output, чтобы неудача печаталась одной
+    строкой FAIL, а не тонной прогресса npx.
+    """
+    out = md.with_suffix(f".{fmt}")
+    suffixed = md.with_name(f"{md.stem}-1.{fmt}")
+    out.unlink(missing_ok=True)
     suffixed.unlink(missing_ok=True)
     try:
         subprocess.run(
-            [*MMDC, "-p", config, "-b", "white", "-s", "2", "-i", md, "-o", png],
+            [*MMDC, "-p", config, "-b", "white", "-s", "2", "-i", md, "-o", out],
             check=True,
             capture_output=True,
             text=True,
@@ -27,21 +67,61 @@ def render(md: Path, config: str) -> bool:
         print(f"FAIL {md.name}: {error.stderr}", file=sys.stderr)
         return False
     if suffixed.exists():
-        suffixed.replace(png)
-    print(f"OK   {png.name}")
-    return png.exists()
+        suffixed.replace(out)
+    print(f"OK   {out.name}")
+    return out.exists()
+
+
+def collect_diagrams(targets: list[Path]) -> list[Path]:
+    """Проверяет переданные пути и возвращает список диаграмм к рендеру.
+
+    Валидация до запуска mmdc даёт понятные причины отказа (нет файла,
+    нет блока mermaid) вместо падения внутри рендера; первый же плохой
+    путь останавливает весь батч, чтобы не тратить минуты рендера на
+    заведомо неполный набор.
+    """
+    for target in targets:
+        if not target.is_file():
+            print(f"Файл не найден: {target}", file=sys.stderr)
+            return []
+        # .mmd — чистый mermaid по определению; .md проверяем на наличие блока.
+        if target.suffix == ".md" and MERMAID_MARKER not in target.read_text(encoding="utf-8"):
+            print(f"В {target.name} нет mermaid-диаграмм", file=sys.stderr)
+            return []
+    return list(targets)
 
 
 def main() -> int:
-    files = sorted(ARCH_DIR.glob("*.md"))
-    diagrams = [md for md in files if "```mermaid" in md.read_text(encoding="utf-8")]
+    """Разбирает аргументы и запускает рендер, возвращая код возврата.
+
+    Возвращает 0 только когда отрендерилось всё запрошенное — на этот
+    код завязаны проверки «перерендерил после правки диаграммы», поэтому
+    частичный успех приравнивается к неудаче.
+    """
+    parser = argparse.ArgumentParser(
+        description="Рендерит mermaid-диаграммы в PNG/SVG рядом с исходниками; "
+        "все диаграммы каталога — scripts/render-all-diagrams."
+    )
+    parser.add_argument(
+        "diagrams",
+        nargs="+",
+        type=Path,
+        help="пути к диаграммам (.md или .mmd), которые перерисовать",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("png", "svg"),
+        default="png",
+        help="формат выхода (по умолчанию png); svg — вход для scripts/check-overlap",
+    )
+    args = parser.parse_args()
+    diagrams = collect_diagrams(args.diagrams)
     if not diagrams:
-        print(f"Нет mermaid-диаграмм в {ARCH_DIR}", file=sys.stderr)
         return 1
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as config:
         config.write(PUPPETEER_CONFIG)
     try:
-        results = [render(md, config.name) for md in diagrams]
+        results = [render(md, config.name, args.format) for md in diagrams]
     finally:
         Path(config.name).unlink(missing_ok=True)
     return 0 if all(results) else 1
