@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type SubmitEvent } from 'react'
 
 type LoginFormProps = {
   onLogin: (nickname: string) => void
@@ -8,7 +8,7 @@ function LoginForm({ onLogin }: LoginFormProps) {
   const [nickname, setNickname] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmed = nickname.trim()
     if (trimmed === '') {

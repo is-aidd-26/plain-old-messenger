@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type SubmitEvent } from 'react'
 import { fetchDialogs, type DialogSummary } from './api'
 
 const PollIntervalMs = 2000
@@ -36,7 +36,7 @@ function DialogList({ user, activePeer, onSelect }: DialogListProps) {
     }
   }, [user])
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const peer = newPeer.trim()
     if (peer !== '') {

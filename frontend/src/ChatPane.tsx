@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type SubmitEvent } from 'react'
 import { fetchMessages, sendMessage, type ChatMessage } from './api'
 
 const PollIntervalMs = 2000
@@ -86,7 +86,7 @@ function ChatPane({ user, peer }: ChatPaneProps) {
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     void handleSend()
   }
