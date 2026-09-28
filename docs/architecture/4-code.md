@@ -4,6 +4,7 @@
 
 ```mermaid
 classDiagram
+    direction LR
     class ChatService {
         <<service>>
         -dialogs Dictionary&lt;string, Dictionary&lt;string, List&lt;Message&gt;&gt;&gt;
@@ -24,21 +25,14 @@ classDiagram
         +Peer string
         +LastMessage Message
     }
-    class MessageRequest {
-        <<record>>
-        +From string
-        +To string
-        +Text string
-    }
 
     DialogSummary o-- Message : LastMessage
     ChatService ..> Message : хранит и создаёт
     ChatService ..> DialogSummary : возвращает
-    ChatService ..> MessageRequest : поля из POST
 ```
 
 ## Пояснения
 
 - `ChatService` — singleton с доступом под `lock` (приватные детали на диаграмме опущены); каждое сообщение попадает в обе стороны диалога, поэтому `Id` один на оба списка.
 - `Message.Id` — сквозная нумерация: по ней работает поллинг (`after` = номер последнего полученного сообщения).
-- Записи (record) — иммутабельные контракты запросов и ответов; `DialogSummary` — проекция для списка диалогов.
+- Записи (record) — иммутабельные контракты запросов и ответов; `DialogSummary` — проекция для списка диалогов. `MessageRequest` — контракт тела POST-запроса, на диаграмме опущен.
