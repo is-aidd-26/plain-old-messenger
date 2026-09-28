@@ -1,12 +1,12 @@
 # C4 — Уровень 4: код бэкенда (классы)
 
-Статическая структура ключевого компонента — `ChatService` — и его контракты. Динамика сценария — на [sequence-диаграмме](4-sequence.md), состав компонентов — на [диаграмме компонентов](3-components.md).
+Статическая структура ключевого компонента — `ChatService` — и его контракты. Динамика — на sequence-диаграммах [отправки](4-send-message.md) и [получения](4-receive-message.md) сообщений, состав компонентов — на [диаграмме компонентов](3-components.md).
 
 ```mermaid
 classDiagram
     class ChatService {
         <<service>>
-        -dialogs user → peer → List~Message~
+        -dialogs Dictionary&lt;string, Dictionary&lt;string, List&lt;Message&gt;&gt;&gt;
         -lastMessageId long
         +GetDialogs(user) IReadOnlyList~DialogSummary~
         +GetMessages(user, peer, afterId) IReadOnlyList~Message~

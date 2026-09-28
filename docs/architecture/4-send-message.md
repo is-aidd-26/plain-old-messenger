@@ -1,6 +1,6 @@
-# C4 — Уровень 4: код бэкенда (последовательность)
+# C4 — Уровень 4: код бэкенда (отправка сообщения)
 
-Сценарий «отправка сообщения» — динамика взаимодействия контейнеров и компонентов. Статическая структура — на [диаграмме классов](4-code.md).
+Сценарий «отправка сообщения» — динамика взаимодействия контейнеров и компонентов. Статическая структура — на [диаграмме классов](4-code.md), получение сообщений — на [sequence-диаграмме получения](4-receive-message.md).
 
 ```mermaid
 sequenceDiagram
@@ -9,14 +9,12 @@ sequenceDiagram
     participant Svc as ChatService
     participant Store as Хранилище
 
-    SPA->>API: POST /api/messages {from, to, text}
-    API->>Svc: SendMessage(from, to, text)
-    Svc->>Svc: валидация, ++Id
-    Svc->>Store: запись в обе стороны диалога
+    SPA->>API: POST /api/messages
+    API->>Svc: SendMessage(...)
+    Svc->>Svc: валидация
+    Svc->>Store: запись в чат
     Svc-->>API: Message
     API-->>SPA: 200 OK, Message
-
-    Note over SPA,Store: У собеседника — те же участники: поллинг GET /api/messages?after=Id раз в 2 с
 ```
 
 ## Пояснения
