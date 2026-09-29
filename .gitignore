@@ -70,3 +70,6 @@ yarn-error.log*
 # Python bytecode cache
 .pyc
 __pycache__
+
+# Local user data
+sandbox/
