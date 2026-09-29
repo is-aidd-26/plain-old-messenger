@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# render-all-diagrams — рендерит все mermaid-диаграммы из docs/architecture/.
+# render-all-diagrams — рендерит все mermaid-диаграммы из docs/architecture/
+# и docs/data/.
 #
 # Работу делает scripts/render-diagrams; этот скрипт лишь собирает md-файлы
 # с блоками ```mermaid и передаёт их списком (render-diagrams принимает
@@ -14,14 +15,22 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-arch_dir="$repo_root/docs/architecture"
+dirs=(
+    "$repo_root/docs/architecture"
+    "$repo_root/docs/data"
+)
+
+md_files=()
+for dir in "${dirs[@]}"; do
+    md_files+=("$dir"/*.md)
+done
 
 # grep -l отбирает только md с блоком ```mermaid: файлы без диаграмм
 # рендерить бессмысленно — mmdc упал бы или дал пустой артефакт.
-mapfile -t diagrams < <(grep -l '```mermaid' "$arch_dir"/*.md 2>/dev/null)
+mapfile -t diagrams < <(grep -l '```mermaid' "${md_files[@]}" 2>/dev/null)
 
 if [ "${#diagrams[@]}" -eq 0 ]; then
-    echo "Нет mermaid-диаграмм в $arch_dir" >&2
+    echo "Нет mermaid-диаграмм в ${dirs[*]}" >&2
     exit 1
 fi
 
