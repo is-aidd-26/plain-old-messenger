@@ -7,6 +7,7 @@
 title: Концептуальная модель данных Plain Old Messenger
 ---
 erDiagram
+    direction LR
     USER["Пользователь"]
     DIALOG["Диалог"]
     MESSAGE["Сообщение"]
