@@ -6,9 +6,14 @@ export type ChatMessage = {
 }
 
 export type DialogSummary = {
+  dialogId: number
   peer: string
   lastMessage: ChatMessage
 }
+
+export type SentMessage = {
+  dialogId: number
+} & ChatMessage
 
 async function readError(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as { error?: string } | null
@@ -24,19 +29,19 @@ export async function fetchDialogs(user: string): Promise<DialogSummary[]> {
 }
 
 export async function fetchMessages(
+  dialogId: number,
   user: string,
-  peer: string,
   after: number,
 ): Promise<ChatMessage[]> {
-  const params = new URLSearchParams({ user, peer, after: String(after) })
-  const response = await fetch(`/api/messages?${params.toString()}`)
+  const params = new URLSearchParams({ user, after: String(after) })
+  const response = await fetch(`/api/dialogs/${dialogId}/messages?${params.toString()}`)
   if (!response.ok) {
     throw new Error(await readError(response))
   }
   return response.json()
 }
 
-export async function sendMessage(from: string, to: string, text: string): Promise<ChatMessage> {
+export async function sendMessage(from: string, to: string, text: string): Promise<SentMessage> {
   const response = await fetch('/api/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -6,13 +6,15 @@ const PollIntervalMs = 2000
 type ChatPaneProps = {
   user: string
   peer: string
+  dialogId: number | null
+  onDialogStarted: (dialogId: number) => void
 }
 
 function formatTime(sentAt: string): string {
   return new Date(sentAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
-function ChatPane({ user, peer }: ChatPaneProps) {
+function ChatPane({ user, peer, dialogId, onDialogStarted }: ChatPaneProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -20,15 +22,22 @@ function ChatPane({ user, peer }: ChatPaneProps) {
   const messagesRef = useRef<HTMLUListElement>(null)
 
   // При переключении диалога сбрасываем состояние прямо в рендере (паттерн из документации React).
-  const [openedPeer, setOpenedPeer] = useState(peer)
-  if (openedPeer !== peer) {
-    setOpenedPeer(peer)
+  // Черновик нового диалога живёт под именем собеседника, пока первое сообщение не даст идентификатор.
+  const identity = dialogId ?? `draft:${peer}`
+  const [openedIdentity, setOpenedIdentity] = useState(identity)
+  if (openedIdentity !== identity) {
+    setOpenedIdentity(identity)
     setMessages([])
     setError(null)
   }
 
   // Загружаем историю нового диалога, затем опрашиваем только свежие сообщения.
   useEffect(() => {
+    if (dialogId === null) {
+      return // у черновика ещё нет истории — она появится вместе с первым сообщением
+    }
+
+    const currentId = dialogId
     let cancelled = false
     lastIdRef.current = 0
 
@@ -42,7 +51,7 @@ function ChatPane({ user, peer }: ChatPaneProps) {
 
     async function poll() {
       try {
-        append(await fetchMessages(user, peer, lastIdRef.current))
+        append(await fetchMessages(currentId, user, lastIdRef.current))
         if (!cancelled) {
           setError(null)
         }
@@ -59,7 +68,7 @@ function ChatPane({ user, peer }: ChatPaneProps) {
       cancelled = true
       clearInterval(timer)
     }
-  }, [user, peer])
+  }, [user, dialogId])
 
   // Прокручиваем переписку вниз при появлении новых сообщений.
   useEffect(() => {
@@ -74,10 +83,13 @@ function ChatPane({ user, peer }: ChatPaneProps) {
     }
 
     try {
-      const message = await sendMessage(user, peer, trimmed)
-      if (message.id > lastIdRef.current) {
-        lastIdRef.current = message.id
-        setMessages((prev) => [...prev, message])
+      const sent = await sendMessage(user, peer, trimmed)
+      if (dialogId === null) {
+        // Черновик получил идентификатор: эффект перезагрузит историю уже по нему.
+        onDialogStarted(sent.dialogId)
+      } else if (sent.id > lastIdRef.current) {
+        lastIdRef.current = sent.id
+        setMessages((prev) => [...prev, sent])
       }
       setText('')
       setError(null)

@@ -5,11 +5,11 @@ const PollIntervalMs = 2000
 
 type DialogListProps = {
   user: string
-  activePeer: string | null
-  onSelect: (peer: string) => void
+  activeDialogId: number | null
+  onSelect: (dialog: { dialogId: number | null; peer: string }) => void
 }
 
-function DialogList({ user, activePeer, onSelect }: DialogListProps) {
+function DialogList({ user, activeDialogId, onSelect }: DialogListProps) {
   const [dialogs, setDialogs] = useState<DialogSummary[]>([])
   const [newPeer, setNewPeer] = useState('')
 
@@ -36,11 +36,12 @@ function DialogList({ user, activePeer, onSelect }: DialogListProps) {
     }
   }, [user])
 
+  // Новый диалог начинается с ника собеседника; идентификатор даст первое сообщение.
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     const peer = newPeer.trim()
     if (peer !== '') {
-      onSelect(peer)
+      onSelect({ dialogId: null, peer })
       setNewPeer('')
     }
   }
@@ -62,11 +63,13 @@ function DialogList({ user, activePeer, onSelect }: DialogListProps) {
       ) : (
         <ul className="dialog-list">
           {dialogs.map((dialog) => (
-            <li key={dialog.peer}>
+            <li key={dialog.dialogId}>
               <button
                 type="button"
-                className={dialog.peer === activePeer ? 'dialog-item active' : 'dialog-item'}
-                onClick={() => onSelect(dialog.peer)}
+                className={
+                  dialog.dialogId === activeDialogId ? 'dialog-item active' : 'dialog-item'
+                }
+                onClick={() => onSelect({ dialogId: dialog.dialogId, peer: dialog.peer })}
               >
                 <span className="dialog-peer">{dialog.peer}</span>
                 <span className="dialog-preview">{dialog.lastMessage.text}</span>

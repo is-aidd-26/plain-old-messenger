@@ -1,114 +1,91 @@
 namespace ChatApi;
 
 /// <summary>
-///  Хранит диалоги в памяти процесса. Диалог — пара никнеймов (пользователь, собеседник);
-///  каждое сообщение попадает в обе стороны диалога, поэтому у каждого участника своя полная история.
-///  После перезапуска процесса все данные сбрасываются.
+///  Фасад над хранилищем: проверяет входные значения, держит бизнес-правила
+///  (лимиты, диалог с самим собой) и логирует отправку. SQL живёт в PostgresChatStore.
 /// </summary>
-public sealed class ChatService(ILogger<ChatService> logger)
+public sealed class ChatService(PostgresChatStore store, ILogger<ChatService> logger)
 {
+    private const int MaxNicknameLength = 64;
     private const int MaxTextLength = 500;
-
-    // Сервис зарегистрирован как singleton, поэтому доступ из параллельных запросов защищаем блокировкой.
-    private readonly object gate = new();
-    private readonly Dictionary<string, Dictionary<string, List<Message>>> dialogs = new();
-    private long lastMessageId;
 
     /// <summary>
     ///  Возвращает список диалогов пользователя.
     /// </summary>
-    public IReadOnlyList<DialogSummary> GetDialogs(string user)
+    public Task<IReadOnlyList<DialogSummary>> GetDialogsAsync(string user)
     {
-        ValidateNickname(user, "пользователя");
-
-        lock (gate)
-        {
-            if (!dialogs.TryGetValue(user, out Dictionary<string, List<Message>>? byPeer))
-            {
-                return [];
-            }
-
-            return byPeer.Select(pair => new DialogSummary(pair.Key, pair.Value[^1])).ToList();
-        }
+        return store.GetDialogsAsync(ValidateNickname(user, "пользователя"));
     }
 
     /// <summary>
     ///  Возвращает сообщения диалога с номерами больше afterId. afterId = 0 означает всю историю.
     /// </summary>
-    public IReadOnlyList<Message> GetMessages(string user, string peer, long afterId)
+    public async Task<IReadOnlyList<Message>> GetMessagesAsync(long dialogId, string user, long afterId)
     {
-        ValidateNickname(user, "пользователя");
-        ValidateNickname(peer, "собеседника");
-
-        lock (gate)
+        if (dialogId < 1)
         {
-            if (!dialogs.TryGetValue(user, out Dictionary<string, List<Message>>? byPeer)
-                || !byPeer.TryGetValue(peer, out List<Message>? messages))
-            {
-                return [];
-            }
-
-            return messages.Where(message => message.Id > afterId).ToList();
+            throw new ArgumentException("Некорректный идентификатор диалога.");
         }
+
+        if (afterId < 0)
+        {
+            throw new ArgumentException("Параметр after должен быть неотрицательным числом.");
+        }
+
+        IReadOnlyList<Message>? messages = await store.GetMessagesAsync(dialogId, ValidateNickname(user, "пользователя"), afterId);
+        return messages ?? throw new DialogNotFoundException($"Диалог {dialogId} не найден.");
     }
 
     /// <summary>
-    ///  Отправляет сообщение от from к to и возвращает сохранённое сообщение.
+    ///  Отправляет сообщение от from к to и возвращает сохранённое сообщение
+    ///  вместе с идентификатором диалога. Незнакомые пользователи создаются лениво.
     /// </summary>
-    public Message SendMessage(string from, string to, string text)
+    public async Task<SentMessage> SendMessageAsync(string from, string to, string text)
     {
-        ValidateNickname(from, "отправителя");
-        ValidateNickname(to, "получателя");
+        string author = ValidateNickname(from, "отправителя");
+        string peer = ValidateNickname(to, "получателя");
+        string trimmedText = ValidateText(text);
 
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            throw new ArgumentException("Сообщение не может быть пустым.");
-        }
-
-        if (text.Length > MaxTextLength)
-        {
-            throw new ArgumentException($"Сообщение длиннее {MaxTextLength} символов.");
-        }
-
-        Message message;
-        lock (gate)
-        {
-            message = new Message(++lastMessageId, from, text.Trim(), DateTimeOffset.UtcNow);
-            Append(from, to, message);
-
-            // Диалог с самим собой уже создан вызовом выше — не дублируем сообщение.
-            if (from != to)
-            {
-                Append(to, from, message);
-            }
-        }
-
-        logger.LogInformation("Сообщение от {From} к {To}: {Text}", from, to, message.Text);
+        SentMessage message = await store.SendMessageAsync(author, peer, trimmedText, DateTimeOffset.UtcNow);
+        logger.LogInformation("Сообщение от {From} к {To}: {Text}", author, peer, message.Text);
         return message;
     }
 
-    private void Append(string user, string peer, Message message)
-    {
-        if (!dialogs.TryGetValue(user, out Dictionary<string, List<Message>>? byPeer))
-        {
-            byPeer = new Dictionary<string, List<Message>>();
-            dialogs[user] = byPeer;
-        }
-
-        if (!byPeer.TryGetValue(peer, out List<Message>? messages))
-        {
-            messages = new List<Message>();
-            byPeer[peer] = messages;
-        }
-
-        messages.Add(message);
-    }
-
-    private static void ValidateNickname(string nickname, string role)
+    /// <summary>
+    ///  Обрезает никнейм и проверяет длину; возвращает обрезанное значение.
+    /// </summary>
+    private static string ValidateNickname(string? nickname, string role)
     {
         if (string.IsNullOrWhiteSpace(nickname))
         {
             throw new ArgumentException($"Никнейм {role} не указан.");
         }
+
+        string trimmed = nickname.Trim();
+        if (trimmed.Length > MaxNicknameLength)
+        {
+            throw new ArgumentException($"Никнейм {role} длиннее {MaxNicknameLength} символов.");
+        }
+
+        return trimmed;
+    }
+
+    /// <summary>
+    ///  Обрезает текст и проверяет длину; возвращает обрезанное значение.
+    /// </summary>
+    private static string ValidateText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            throw new ArgumentException("Сообщение не может быть пустым.");
+        }
+
+        string trimmed = text.Trim();
+        if (trimmed.Length > MaxTextLength)
+        {
+            throw new ArgumentException($"Сообщение длиннее {MaxTextLength} символов.");
+        }
+
+        return trimmed;
     }
 }

@@ -1,0 +1,25 @@
+# Локальная база данных для разработки.
+# Сброс к чистой базе: docker compose down -v
+services:
+  db:
+    image: postgres:18
+    container_name: plain-old-messenger-db
+    environment:
+      POSTGRES_DB: chat
+      POSTGRES_USER: chat
+      POSTGRES_PASSWORD: chat # учебные значения, только для локальной разработки
+    ports:
+      - "5432:5432" # наружу — для диагностики через psql или GUI-клиент
+    volumes:
+      # С PostgreSQL 18 том монтируется в /var/lib/postgresql: данные лягут
+      # в подкаталог версии и не будут конфликтовать при обновлении образа.
+      - plain-old-messenger-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat -d chat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+# Данные хранятся в именованном томе plain-old-messenger-data.
+volumes:
+  plain-old-messenger-data:
