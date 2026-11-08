@@ -26,6 +26,7 @@
 | 04_postgres          | Добавлено хранение в Postgres          |
 | 05_integration_tests | Добавлены интеграционные тесты бэкенда |
 | 06_gherkin           | Тесты переписаны на Gherkin + Reqnroll |
+| 07_code_coverage     | Покрытие тестами и контроль порога 70% |
 
 ## Запуск фронтенда и бэкенда
 
@@ -74,11 +75,15 @@ docker compose exec db psql -U chat -d chat
 dotnet build
 
 # Запуск интеграционных тестов (Gherkin + Reqnroll).
-# Сценарии описаны в tests/ChatApi.Specs/Messaging.feature на русском диалекте
-# Gherkin и исполняются через Reqnroll.xUnit: приложение поднимается в памяти,
-# PostgreSQL запускается через testcontainers. Каждый сценарий получает
-# собственную базу данных внутри одного контейнера.
+# Приложение поднимается в памяти, PostgreSQL запускается через testcontainers.
+# Каждый сценарий получает собственную базу данных внутри одного контейнера.
 dotnet test
+
+# HTML-отчёт о покрытии кода тестами: tests/coverage-report/index.html
+# Требуются dotnet-инструменты (устанавливаются один раз):
+#   dotnet tool install --global dotnet-coverage
+#   dotnet tool install --global dotnet-reportgenerator-globaltool
+scripts/run-tests-with-coverage
 
 # Переход в каталог фронтенда
 cd frontend/
