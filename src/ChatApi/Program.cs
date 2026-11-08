@@ -62,3 +62,8 @@ app.MapPost("/api/messages", async (MessageRequest request, ChatService chatServ
 });
 
 app.Run();
+
+/// <summary>
+///  Делает неявный класс Program доступным для WebApplicationFactory в тестах.
+/// </summary>
+public partial class Program;
