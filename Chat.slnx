@@ -3,6 +3,6 @@
     <Project Path="src/ChatApi/ChatApi.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/ChatApi.IntegrationTests/ChatApi.IntegrationTests.csproj" />
+    <Project Path="tests/ChatApi.Specs/ChatApi.Specs.csproj" />
   </Folder>
 </Solution>

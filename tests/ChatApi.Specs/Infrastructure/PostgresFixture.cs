@@ -1,13 +1,13 @@
 using Testcontainers.PostgreSql;
-using Xunit;
 
-namespace ChatApi.IntegrationTests.Infrastructure;
+namespace ChatApi.Specs.Infrastructure;
 
 /// <summary>
 ///  Один контейнер PostgreSQL 18 на весь прогон тестов: изоляция достигается отдельной
-///  базой данных на каждый тест, а не отдельным контейнером.
+///  базой данных на каждый сценарий, а не отдельным контейнером. Запускается хуком
+///  BeforeTestRun, останавливается хуком AfterTestRun.
 /// </summary>
-public sealed class PostgresFixture : IAsyncLifetime
+public sealed class PostgresFixture
 {
     private const string PostgresImage = "postgres:18";
 
@@ -19,9 +19,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     /// </summary>
     public string AdminConnectionString => _container.GetConnectionString();
 
-    /// <summary> Запускает контейнер один раз перед тестами коллекции. </summary>
-    public Task InitializeAsync() => _container.StartAsync();
+    /// <summary> Запускает контейнер один раз перед прогоном тестов. </summary>
+    public Task StartAsync() => _container.StartAsync();
 
-    /// <summary> Останавливает контейнер после тестов коллекции. </summary>
+    /// <summary> Останавливает контейнер после прогона тестов. </summary>
     public Task DisposeAsync() => _container.DisposeAsync().AsTask();
 }

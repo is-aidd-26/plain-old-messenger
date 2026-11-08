@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace ChatApi.IntegrationTests.Infrastructure;
+namespace ChatApi.Specs.Infrastructure;
 
 /// <summary>
 ///  Создаёт и удаляет базы данных внутри контейнера PostgreSQL. Имя базы генерируется

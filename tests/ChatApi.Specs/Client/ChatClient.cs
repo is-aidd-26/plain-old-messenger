@@ -1,10 +1,10 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace ChatApi.IntegrationTests.Client;
+namespace ChatApi.Specs.Client;
 
 /// <summary> Клиент публичного API чата поверх HttpClient из TestServer. </summary>
-internal sealed class ChatClient(HttpClient http)
+public sealed class ChatClient(HttpClient http)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -39,7 +39,12 @@ internal sealed class ChatClient(HttpClient http)
     /// <summary> Возвращает сообщения диалога с номерами больше after. </summary>
     public async Task<IReadOnlyList<ApiMessage>> GetMessagesAsync(long dialogId, string user, long after)
     {
-        HttpResponseMessage response = await TryGetMessagesAsync(dialogId, user, after);
+        return await ReadMessagesAsync(await TryGetMessagesAsync(dialogId, user, after));
+    }
+
+    /// <summary> Читает список сообщений из успешного ответа API. </summary>
+    public static async Task<IReadOnlyList<ApiMessage>> ReadMessagesAsync(HttpResponseMessage response)
+    {
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<IReadOnlyList<ApiMessage>>(Json) ?? [];
     }
