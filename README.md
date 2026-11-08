@@ -44,14 +44,11 @@ dotnet run --project src/ChatApi/
 ### Терминал 2 — запуск фронтенда:
 
 ```bash
-# Переходим в каталог фронтенда.
-cd frontend/
-
 # Однократно устанавливаем зависимости.
-npm install
+npm -C frontend/ ci
 
 # Запускаем фронтенд.
-npm run dev
+npm -C frontend/ run dev
 ```
 
 Дальше можно открыть в браузере http://localhost:5173

@@ -381,6 +381,9 @@ dotnet_diagnostic.RCS1012.severity = error
 # Отключаем излишние правила Roslynator
 dotnet_diagnostic.RCS1123.severity = none
 
+# Запрет на излишне общие обработчики catch: catch {} и catch (Exception)
+dotnet_diagnostic.CA1031.severity = error
+
 # Общие настройки для остальных файлов
 
 [*]

@@ -21,6 +21,13 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CatchClause > BlockStatement[body.length=0]',
+          message: 'Empty catch is not allowed: handle the error, log it, or rethrow it.',
+        },
+      ],
     },
   },
 )
