@@ -14,7 +14,7 @@ public sealed class ChatService(PostgresChatStore store, ILogger<ChatService> lo
     /// </summary>
     public Task<IReadOnlyList<DialogSummary>> GetDialogsAsync(string user)
     {
-        return store.GetDialogsAsync(ValidateNickname(user, "пользователя"));
+        return store.GetDialogsAsync(ValidateNickname(user, "user"));
     }
 
     /// <summary>
@@ -24,16 +24,16 @@ public sealed class ChatService(PostgresChatStore store, ILogger<ChatService> lo
     {
         if (dialogId < 1)
         {
-            throw new ArgumentException("Некорректный идентификатор диалога.");
+            throw new ArgumentException("Invalid dialog identifier.");
         }
 
         if (afterId < 0)
         {
-            throw new ArgumentException("Параметр after должен быть неотрицательным числом.");
+            throw new ArgumentException("The after parameter must be a non-negative number.");
         }
 
-        IReadOnlyList<Message>? messages = await store.GetMessagesAsync(dialogId, ValidateNickname(user, "пользователя"), afterId);
-        return messages ?? throw new DialogNotFoundException($"Диалог {dialogId} не найден.");
+        IReadOnlyList<Message>? messages = await store.GetMessagesAsync(dialogId, ValidateNickname(user, "user"), afterId);
+        return messages ?? throw new DialogNotFoundException($"Dialog {dialogId} was not found.");
     }
 
     /// <summary>
@@ -42,12 +42,12 @@ public sealed class ChatService(PostgresChatStore store, ILogger<ChatService> lo
     /// </summary>
     public async Task<SentMessage> SendMessageAsync(string from, string to, string text)
     {
-        string author = ValidateNickname(from, "отправителя");
-        string peer = ValidateNickname(to, "получателя");
+        string author = ValidateNickname(from, "sender");
+        string peer = ValidateNickname(to, "recipient");
         string trimmedText = ValidateText(text);
 
         SentMessage message = await store.SendMessageAsync(author, peer, trimmedText, DateTimeOffset.UtcNow);
-        logger.LogInformation("Сообщение от {From} к {To}: {Text}", author, peer, message.Text);
+        logger.LogInformation("Message from {From} to {To}: {Text}", author, peer, message.Text);
         return message;
     }
 
@@ -58,13 +58,13 @@ public sealed class ChatService(PostgresChatStore store, ILogger<ChatService> lo
     {
         if (string.IsNullOrWhiteSpace(nickname))
         {
-            throw new ArgumentException($"Никнейм {role} не указан.");
+            throw new ArgumentException($"The {role} nickname is not specified.");
         }
 
         string trimmed = nickname.Trim();
         if (trimmed.Length > MaxNicknameLength)
         {
-            throw new ArgumentException($"Никнейм {role} длиннее {MaxNicknameLength} символов.");
+            throw new ArgumentException($"The {role} nickname is longer than {MaxNicknameLength} characters.");
         }
 
         return trimmed;
@@ -77,13 +77,13 @@ public sealed class ChatService(PostgresChatStore store, ILogger<ChatService> lo
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            throw new ArgumentException("Сообщение не может быть пустым.");
+            throw new ArgumentException("The message text cannot be blank.");
         }
 
         string trimmed = text.Trim();
         if (trimmed.Length > MaxTextLength)
         {
-            throw new ArgumentException($"Сообщение длиннее {MaxTextLength} символов.");
+            throw new ArgumentException($"The message text is longer than {MaxTextLength} characters.");
         }
 
         return trimmed;

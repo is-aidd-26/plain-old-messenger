@@ -199,7 +199,7 @@ public sealed class PostgresChatStore(NpgsqlDataSource dataSource)
     private static async Task<long> ExecuteScalarLongAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, params object?[] values)
     {
         object? value = await ExecuteScalarAsync(connection, transaction, sql, values);
-        return value is long id ? id : throw new InvalidOperationException("База не вернула идентификатор.");
+        return value is long id ? id : throw new InvalidOperationException("The database did not return an identifier.");
     }
 
     private static async Task ExecuteAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, string sql, params object?[] values)
