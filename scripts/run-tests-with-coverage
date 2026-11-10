@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Запускает тесты со сбором данных о покрытии кода тестами.
+# Обрабатывает эти данные, генерируя отчёт о покрытии тестами.
+#
+# Установка инструментов для обработки данных о покрытии кода тестами:
+#   dotnet tool install --global dotnet-coverage
+#   dotnet tool install --global dotnet-reportgenerator-globaltool
+#
+# По завершению скрипта создаётся HTML-отчёт: tests/coverage-report/index.html
+
+set -o errexit
+
+PROJECT_DIR=$(dirname "$(dirname "$(readlink -f "$0")")")
+
+echo_call() {
+    echo "$@"
+    "$@"
+}
+
+pushd "$PROJECT_DIR" >/dev/null
+echo_call rm -rf tests/coverage/
+echo_call rm -rf tests/coverage-report/
+# /p:CollectCoverage=false отключает контроль порога через coverlet.msbuild,
+# чтобы не собирать покрытие дважды — отчёт строит coverlet.collector.
+echo_call dotnet test --settings tests/tests.runsettings --collect "XPlat Code Coverage" --results-directory=tests/coverage/ /p:CollectCoverage=false
+echo_call dotnet-coverage merge tests/coverage/*/*.xml --output tests/coverage/merged.cobertura.xml --output-format cobertura
+echo_call reportgenerator -reports:tests/coverage/merged.cobertura.xml -targetdir:tests/coverage-report/ -reporttypes:Html
+popd >/dev/null

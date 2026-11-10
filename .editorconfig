@@ -359,6 +359,8 @@ dotnet_diagnostic.SA1407.severity = none
 dotnet_diagnostic.SA1009.severity = none
 dotnet_diagnostic.SA1111.severity = none
 dotnet_diagnostic.SA1309.severity = none
+# s_-префикс приватных статических полей — рекомендация Microsoft (.editorconfig naming rules)
+dotnet_diagnostic.SA1308.severity = none
 dotnet_diagnostic.SA1629.severity = none
 dotnet_diagnostic.SA1214.severity = none
 
@@ -380,6 +382,13 @@ dotnet_diagnostic.RCS1012.severity = error
 
 # Отключаем излишние правила Roslynator
 dotnet_diagnostic.RCS1123.severity = none
+
+# Запрет на излишне общие обработчики catch: catch {} и catch (Exception)
+dotnet_diagnostic.CA1031.severity = error
+
+# Код, генерируемый Reqnroll из .feature-файлов, не проверяется анализаторами
+[*.feature.cs]
+generated_code = true
 
 # Общие настройки для остальных файлов
 

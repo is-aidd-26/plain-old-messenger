@@ -17,13 +17,16 @@
 
 Все этапы разработки этого проекта сохранены в отдельных ветках. В master — последний завершённый этап.
 
-| Ветка       | Что добавлено                 |
-| ----------- | ----------------------------- |
-| 00_template | Скопирован шаблон проекта     |
-| 01_prd      | Написан PRD.md и SRS.md       |
-| 02_arch     | Добавлены C4 диаграммы        |
-| 03_er       | Добавлены ER-диаграммы        |
-| 04_postgres | Добавлено хранение в Postgres |
+| Ветка                | Что добавлено                          |
+| -------------------- | -------------------------------------- |
+| 00_template          | Скопирован шаблон проекта              |
+| 01_prd               | Написан PRD.md и SRS.md                |
+| 02_arch              | Добавлены C4 диаграммы                 |
+| 03_er                | Добавлены ER-диаграммы                 |
+| 04_postgres          | Добавлено хранение в Postgres          |
+| 05_integration_tests | Добавлены интеграционные тесты бэкенда |
+| 06_gherkin           | Тесты переписаны на Gherkin + Reqnroll |
+| 07_code_coverage     | Покрытие тестами и контроль порога 70% |
 
 ## Запуск фронтенда и бэкенда
 
@@ -43,14 +46,11 @@ dotnet run --project src/ChatApi/
 ### Терминал 2 — запуск фронтенда:
 
 ```bash
-# Переходим в каталог фронтенда.
-cd frontend/
-
 # Однократно устанавливаем зависимости.
-npm install
+npm -C frontend/ ci
 
-# Запускаем фролнтенд.
-npm run dev
+# Запускаем фронтенд.
+npm -C frontend/ run dev
 ```
 
 Дальше можно открыть в браузере http://localhost:5173
@@ -73,6 +73,17 @@ docker compose exec db psql -U chat -d chat
 ```bash
 # Сборка бэкенда, в том числе статический анализ линтерами
 dotnet build
+
+# Запуск интеграционных тестов (Gherkin + Reqnroll).
+# Приложение поднимается в памяти, PostgreSQL запускается через testcontainers.
+# Каждый сценарий получает собственную базу данных внутри одного контейнера.
+dotnet test
+
+# HTML-отчёт о покрытии кода тестами: tests/coverage-report/index.html
+# Требуются dotnet-инструменты (устанавливаются один раз):
+#   dotnet tool install --global dotnet-coverage
+#   dotnet tool install --global dotnet-reportgenerator-globaltool
+scripts/run-tests-with-coverage
 
 # Переход в каталог фронтенда
 cd frontend/

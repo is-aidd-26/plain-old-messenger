@@ -44,6 +44,14 @@ ScaffoldingReadMe.txt
 *~
 CodeCoverage/
 
+# Reqnroll: код, генерируемый из .feature-файлов при сборке
+*.feature.cs
+
+# Данные о покрытии кода тестами
+coverage.json
+tests/coverage/
+tests/coverage-report/
+
 # MSBuild Binary and Structured Log
 *.binlog
 

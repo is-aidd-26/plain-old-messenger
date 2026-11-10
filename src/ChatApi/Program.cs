@@ -6,7 +6,7 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Строка подключения берётся из appsettings.json (ConnectionStrings:Chat) и переопределяется
 // стандартной конфигурацией .NET, например переменной окружения ConnectionStrings__Chat.
 string connectionString = builder.Configuration.GetConnectionString("Chat")
-    ?? throw new InvalidOperationException("Не задана строка подключения ConnectionStrings:Chat.");
+    ?? throw new InvalidOperationException("The connection string ConnectionStrings:Chat is not configured.");
 
 // NpgsqlDataSource создаётся один раз и раздаёт подключения всем запросам.
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(connectionString));
@@ -62,3 +62,8 @@ app.MapPost("/api/messages", async (MessageRequest request, ChatService chatServ
 });
 
 app.Run();
+
+/// <summary>
+///  Делает неявный класс Program доступным для WebApplicationFactory в тестах.
+/// </summary>
+public partial class Program;

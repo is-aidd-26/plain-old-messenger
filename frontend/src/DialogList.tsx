@@ -12,6 +12,7 @@ type DialogListProps = {
 function DialogList({ user, activeDialogId, onSelect }: DialogListProps) {
   const [dialogs, setDialogs] = useState<DialogSummary[]>([])
   const [newPeer, setNewPeer] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Загружаем список диалогов и обновляем его опросом, чтобы замечать новые входящие.
   useEffect(() => {
@@ -22,9 +23,13 @@ function DialogList({ user, activeDialogId, onSelect }: DialogListProps) {
         const fresh = await fetchDialogs(user)
         if (!cancelled) {
           setDialogs(fresh)
+          setLoadError(null)
         }
-      } catch {
-        // Список обновится при следующем опросе.
+      } catch (err) {
+        console.error('Не удалось загрузить список диалогов', err)
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить диалоги.')
+        }
       }
     }
 
@@ -59,7 +64,11 @@ function DialogList({ user, activeDialogId, onSelect }: DialogListProps) {
         <button type="submit">Начать</button>
       </form>
       {dialogs.length === 0 ? (
-        <p className="hint">Нет диалогов. Укажите ник собеседника, чтобы начать новый.</p>
+        loadError !== null ? (
+          <p className="error">{loadError}</p>
+        ) : (
+          <p className="hint">Нет диалогов. Укажите ник собеседника, чтобы начать новый.</p>
+        )
       ) : (
         <ul className="dialog-list">
           {dialogs.map((dialog) => (

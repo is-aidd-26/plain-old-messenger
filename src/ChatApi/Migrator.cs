@@ -43,7 +43,7 @@ public static class Migrator
             }
             catch (NpgsqlException e) when (DateTime.UtcNow < deadline)
             {
-                logger.LogInformation(e, "База ещё не готова, повторяем попытку…");
+                logger.LogInformation(e, "The database is not ready yet, retrying...");
                 await Task.Delay(RetryPause);
             }
         }
@@ -73,7 +73,7 @@ public static class Migrator
             }
 
             using Stream stream = assembly.GetManifestResourceStream(resourceName)
-                ?? throw new InvalidOperationException($"Ресурс миграции не найден: {resourceName}");
+                ?? throw new InvalidOperationException($"Migration resource not found: {resourceName}");
             using StreamReader reader = new(stream);
             string script = await reader.ReadToEndAsync();
 
@@ -83,7 +83,7 @@ public static class Migrator
             await ExecuteAsync(connection, transaction, "INSERT INTO schema_migrations (version) VALUES ($1)", version);
             await transaction.CommitAsync();
 
-            logger.LogInformation("Применена миграция {Version}", version);
+            logger.LogInformation("Applied migration {Version}", version);
         }
     }
 
